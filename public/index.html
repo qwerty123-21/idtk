@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 关联猜词</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg: #eef2ff;
+      --card: rgba(255, 255, 255, 0.92);
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #6d28d9;
+      --primary-2: #2563eb;
+      --border: rgba(148, 163, 184, 0.35);
+      --shadow: 0 24px 80px rgba(15, 23, 42, 0.14);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(129, 140, 248, 0.35), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.25), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      padding: 28px;
+    }
+
+    .wrap { width: min(1180px, 100%); margin: 0 auto; }
+
+    .hero, .main-card, .side-card, .history-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+    }
+
+    .hero {
+      border-radius: 34px;
+      padding: 38px 32px;
+      margin-bottom: 26px;
+    }
+
+    .badge {
+      display: inline-flex;
+      gap: 8px;
+      color: #4338ca;
+      background: #eef2ff;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(42px, 7vw, 78px);
+      letter-spacing: -0.06em;
+      line-height: 1;
+    }
+
+    .hero p {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.7;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 350px;
+      gap: 26px;
+      align-items: start;
+    }
+
+    @media (max-width: 980px) {
+      body { padding: 16px; }
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .main-card, .side-card, .history-card { border-radius: 32px; }
+
+    .question-top {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(109, 40, 217, 0.9));
+      color: white;
+      padding: 34px;
+      border-radius: 32px 32px 0 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .label {
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+
+    .code {
+      font-size: clamp(72px, 12vw, 120px);
+      line-height: 0.9;
+      font-weight: 950;
+      letter-spacing: 0.03em;
+    }
+
+    .word-pill {
+      min-width: 170px;
+      padding: 24px 28px;
+      text-align: center;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .word-pill b { display: block; font-size: 18px; margin-bottom: 8px; }
+    .word-pill span { font-size: 30px; font-weight: 900; }
+
+    @media (max-width: 620px) {
+      .question-top { grid-template-columns: 1fr; }
+      .word-pill { width: 100%; }
+    }
+
+    .play-area, .side-card, .history-card { padding: 30px; }
+
+    .api-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 18px;
+      margin-bottom: 22px;
+    }
+
+    .api-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 760px) {
+      .api-grid { grid-template-columns: 1fr; }
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      margin-bottom: 22px;
+      align-items: end;
+    }
+
+    @media (max-width: 760px) {
+      .controls { grid-template-columns: 1fr; }
+    }
+
+    label {
+      display: block;
+      font-weight: 900;
+      margin-bottom: 9px;
+    }
+
+    select, input, button {
+      width: 100%;
+      border: 0;
+      border-radius: 20px;
+      padding: 16px 18px;
+      font-size: 17px;
+      outline: none;
+      font-family: inherit;
+    }
+
+    select, input {
+      color: var(--text);
+      background: white;
+      border: 1px solid var(--border);
+    }
+
+    input:focus, select:focus {
+      border-color: rgba(109, 40, 217, 0.45);
+      box-shadow: 0 0 0 5px rgba(109, 40, 217, 0.12);
+    }
+
+    button {
+      cursor: pointer;
+      color: white;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--primary-2), var(--primary));
+      box-shadow: 0 14px 30px rgba(109, 40, 217, 0.25);
+      transition: transform 0.12s ease, opacity 0.12s ease;
+      white-space: nowrap;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { cursor: not-allowed; opacity: 0.55; transform: none; }
+
+    .secondary {
+      background: #eef2ff;
+      color: #4338ca;
+      box-shadow: none;
+      border: 1px solid rgba(99, 102, 241, 0.18);
+    }
+
+    .guess-row {
+      display: grid;
+      grid-template-columns: 1fr 150px;
+      gap: 12px;
+    }
+
+    @media (max-width: 620px) {
+      .guess-row { grid-template-columns: 1fr; }
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .tag {
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .history-card { margin-top: 26px; }
+
+    .history-title, .side-title {
+      margin: 0 0 18px;
+      font-size: 26px;
+      font-weight: 950;
+      letter-spacing: -0.03em;
+    }
+
+    .log { display: grid; gap: 14px; }
+
+    .empty {
+      color: var(--muted);
+      background: #f8fafc;
+      border: 1px dashed var(--border);
+      border-radius: 22px;
+      padding: 22px;
+      line-height: 1.7;
+    }
+
+    .msg {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 20px 22px;
+      line-height: 1.75;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04);
+    }
+
+    .msg-head {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-weight: 950;
+      font-size: 19px;
+    }
+
+    .score { display: flex; gap: 8px; align-items: center; }
+
+    .chip {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .ai .chip { background: #ede9fe; color: #5b21b6; }
+    .system { background: #f0fdf4; border-color: #bbf7d0; }
+    .error { background: #fff1f2; border-color: #fecdd3; }
+
+    .hint-box {
+      margin-top: 12px;
+      padding: 13px 16px;
+      border-radius: 18px;
+      background: #eef2ff;
+      color: #4338ca;
+      font-weight: 700;
+    }
+
+    .side-card {
+      position: sticky;
+      top: 20px;
+    }
+
+    @media (max-width: 980px) {
+      .side-card { position: static; }
+    }
+
+    .side-card p {
+      color: #475569;
+      line-height: 1.8;
+      font-size: 17px;
+      margin: 0 0 18px;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .loader {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.45);
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      vertical-align: -0.15em;
+      margin-right: 8px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div class="badge">✨ AI 关联猜词</div>
+      <h1>看提示，猜隐藏词</h1>
+      <p>这版不用 Railway Variables。API Key 在网页里填写，默认使用 SecondZero 接口和模型。</p>
+    </section>
+
+    <div class="layout">
+      <main>
+        <section class="main-card">
+          <div class="question-top">
+            <div>
+              <div class="label">公开提示</div>
+              <div class="code" id="codeText">?</div>
+            </div>
+            <div class="word-pill">
+              <b>隐藏词</b>
+              <span id="wordCount">? 字</span>
+            </div>
+          </div>
+
+          <div class="play-area">
+            <div class="api-box">
+              <div class="api-grid">
+                <div>
+                  <label for="apiKey">API Key</label>
+                  <input id="apiKey" type="password" placeholder="粘贴你的 SecondZero API Key" />
+                </div>
+                <div>
+                  <label for="model">模型</label>
+                  <input id="model" value="gemini-3-flash-preview-minimal-search" />
+                </div>
+                <div>
+                  <label for="apiUrl">API 地址</label>
+                  <input id="apiUrl" value="https://api.secondzero-ai.com/v1/chat/completions" />
+                </div>
+                <div>
+                  <label>&nbsp;</label>
+                  <button class="secondary" id="saveKeyBtn">保存到本机浏览器</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="controls">
+              <div>
+                <label for="category">题材</label>
+                <select id="category">
+                  <option value="随机">随机</option>
+                  <option value="日常生活">日常生活</option>
+                  <option value="情绪状态">情绪状态</option>
+                  <option value="物品">物品</option>
+                  <option value="食物">食物</option>
+                  <option value="动物植物">动物植物</option>
+                  <option value="地点场所">地点场所</option>
+                  <option value="动作行为">动作行为</option>
+                  <option value="抽象概念">抽象概念</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="difficulty">难度</label>
+                <select id="difficulty">
+                  <option value="简单">简单</option>
+                  <option value="普通" selected>普通</option>
+                  <option value="困难">困难</option>
+                  <option value="地狱">地狱</option>
+                </select>
+              </div>
+
+              <button id="newGameBtn">开始新游戏</button>
+            </div>
+
+            <div class="meta">
+              <span class="tag" id="roundTag">回合：0</span>
+              <span class="tag" id="lifeTag">机会：8</span>
+              <span class="tag" id="statusTag">状态：未开始</span>
+            </div>
+
+            <label for="guessInput">输入你的猜测</label>
+            <div class="guess-row">
+              <input id="guessInput" placeholder="例如：火锅、春节、飞机……" disabled />
+              <button id="guessBtn" disabled>提交猜测</button>
+            </div>
+
+            <div class="actions">
+              <button class="secondary" id="hintBtn" disabled>要提示</button>
+              <button class="secondary" id="revealBtn" disabled>公布答案</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="history-card">
+          <h2 class="history-title">猜测记录</h2>
+          <div class="log" id="log">
+            <div class="empty">先填写 API Key，点保存，再开始新游戏。</div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="side-card">
+        <h2 class="side-title">玩法说明</h2>
+        <p>例子：如果答案是“犹豫”，公开提示是 <b>Y2</b>。你猜“床单”，AI 可能会说：“人躺在上面可能会这样。”</p>
+        <p>Key 不会上传到 GitHub，也不用填 Railway Variables。它只保存在你自己的浏览器里。</p>
+        <div class="small">如果换电脑或换浏览器，需要重新在网页里粘贴一次 Key。</div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const codeText = $("codeText");
+    const wordCount = $("wordCount");
+    const category = $("category");
+    const difficulty = $("difficulty");
+    const newGameBtn = $("newGameBtn");
+    const guessInput = $("guessInput");
+    const guessBtn = $("guessBtn");
+    const hintBtn = $("hintBtn");
+    const revealBtn = $("revealBtn");
+    const roundTag = $("roundTag");
+    const lifeTag = $("lifeTag");
+    const statusTag = $("statusTag");
+    const log = $("log");
+
+    const apiKeyInput = $("apiKey");
+    const apiUrlInput = $("apiUrl");
+    const modelInput = $("model");
+    const saveKeyBtn = $("saveKeyBtn");
+
+    let gameId = "";
+    let lives = 8;
+    let rounds = 0;
+    let over = true;
+
+    loadSettings();
+
+    saveKeyBtn.addEventListener("click", saveSettings);
+    newGameBtn.addEventListener("click", startNewGame);
+    guessBtn.addEventListener("click", submitGuess);
+    hintBtn.addEventListener("click", askHint);
+    revealBtn.addEventListener("click", revealAnswer);
+
+    guessInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") submitGuess();
+    });
+
+    function loadSettings() {
+      apiKeyInput.value = localStorage.getItem("assoc_ai_api_key") || "";
+      apiUrlInput.value = localStorage.getItem("assoc_ai_api_url") || "https://api.secondzero-ai.com/v1/chat/completions";
+      modelInput.value = localStorage.getItem("assoc_ai_model") || "gemini-3-flash-preview-minimal-search";
+    }
+
+    function saveSettings() {
+      localStorage.setItem("assoc_ai_api_key", apiKeyInput.value.trim());
+      localStorage.setItem("assoc_ai_api_url", apiUrlInput.value.trim());
+      localStorage.setItem("assoc_ai_model", modelInput.value.trim());
+
+      addMessage({
+        title: "已保存",
+        text: "API 设置已保存到当前浏览器。",
+        type: "system"
+      });
+    }
+
+    function getAIHeaders() {
+      const apiKey = apiKeyInput.value.trim();
+      const apiUrl = apiUrlInput.value.trim();
+      const model = modelInput.value.trim();
+
+      if (!apiKey) {
+        throw new Error("请先填写 API Key。");
+      }
+
+      return {
+        "X-AI-API-Key": apiKey,
+        "X-AI-API-URL": apiUrl,
+        "X-AI-Model": model
+      };
+    }
+
+    function setLoading(button, loading, text) {
+      if (loading) {
+        button.dataset.oldText = button.textContent;
+        button.innerHTML = `<span class="loader"></span>${text}`;
+        button.disabled = true;
+      } else {
+        button.textContent = button.dataset.oldText || text;
+      }
+    }
+
+    function setGameEnabled(enabled) {
+      guessInput.disabled = !enabled;
+      guessBtn.disabled = !enabled;
+      hintBtn.disabled = !enabled;
+      revealBtn.disabled = !enabled;
+    }
+
+    function updateMeta() {
+      roundTag.textContent = `回合：${rounds}`;
+      lifeTag.textContent = `机会：${lives}`;
+      statusTag.textContent = `状态：${over ? "已结束" : "进行中"}`;
+    }
+
+    function setCode(code) {
+      codeText.textContent = code || "?";
+      const match = String(code || "").match(/(\d+)$/);
+      wordCount.textContent = match ? `${match[1]} 字` : "? 字";
+    }
+
+    function clearLog() {
+      log.innerHTML = "";
+    }
+
+    function addMessage({ title, text, type = "ai", chips = [], hint = "" }) {
+      const item = document.createElement("div");
+      item.className = `msg ${type}`;
+      const chipsHtml = chips.map((chip) => `<span class="chip">${escapeHtml(chip)}</span>`).join("");
+
+      item.innerHTML = `
+        <div class="msg-head">
+          <span>${escapeHtml(title)}</span>
+          <span class="score">${chipsHtml}</span>
+        </div>
+        <div>${escapeHtml(text)}</div>
+        ${hint ? `<div class="hint-box">${escapeHtml(hint)}</div>` : ""}
+      `;
+
+      log.prepend(item);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function apiPost(url, data) {
+      const headers = {
+        "Content-Type": "application/json",
+        ...getAIHeaders()
+      };
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(result.error || `请求失败：${response.status}`);
+      }
+
+      return result;
+    }
+
+    async function startNewGame() {
+      saveSettings();
+      setLoading(newGameBtn, true, "生成中");
+
+      try {
+        const result = await apiPost("/api/new-game", {
+          category: category.value,
+          difficulty: difficulty.value
+        });
+
+        gameId = result.gameId;
+        lives = result.lives;
+        rounds = result.rounds;
+        over = false;
+
+        setCode(result.code);
+        clearLog();
+        addMessage({
+          title: "新游戏开始",
+          text: `公开提示是 ${result.code}。开始猜吧。`,
+          type: "system",
+          chips: [category.value, difficulty.value]
+        });
+
+        guessInput.value = "";
+        setGameEnabled(true);
+        updateMeta();
+        guessInput.focus();
+      } catch (error) {
+        addMessage({
+          title: "创建失败",
+          text: error.message,
+          type: "error",
+          hint: "如果是 403，多半是 Key、余额、模型权限，或这个模型不支持当前请求。"
+        });
+      } finally {
+        setLoading(newGameBtn, false, "开始新游戏");
+        newGameBtn.disabled = false;
+      }
+    }
+
+    async function submitGuess() {
+      const guess = guessInput.value.trim();
+      if (!guess || !gameId || over) return;
+
+      guessInput.value = "";
+
+      addMessage({
+        title: guess,
+        text: "等待 AI 分析关联……",
+        type: "user"
+      });
+
+      setLoading(guessBtn, true, "分析中");
+
+      try {
+        const result = await apiPost("/api/guess", { gameId, guess });
+
+        lives = result.lives ?? lives;
+        rounds = result.rounds ?? rounds;
+        over = Boolean(result.over);
+
+        if (result.answer) setCode(result.answer);
+
+        addMessage({
+          title: result.correct ? "答对了" : guess,
+          text: result.message,
+          type: result.correct || result.over ? "system" : "ai",
+          chips: result.correct ? ["正确"] : [over ? "结束" : "关联"]
+        });
+
+        if (over) setGameEnabled(false);
+        updateMeta();
+      } catch (error) {
+        addMessage({
+          title: "分析失败",
+          text: error.message,
+          type: "error"
+        });
+      } finally {
+        setLoading(guessBtn, false, "提交猜测");
+        if (!over) guessBtn.disabled = false;
+      }
+    }
+
+    async function askHint() {
+      if (!gameId || over) return;
+
+      setLoading(hintBtn, true, "提示中");
+
+      try {
+        const result = await apiPost("/api/hint", { gameId });
+
+        lives = result.lives ?? lives;
+        rounds = result.rounds ?? rounds;
+        over = Boolean(result.over);
+
+        addMessage({
+          title: "额外提示",
+          text: result.message,
+          type: "ai",
+          chips: ["-1 机会"]
+        });
+
+        updateMeta();
+      } catch (error) {
+        addMessage({
+          title: "提示失败",
+          text: error.message,
+          type: "error"
+        });
+      } finally {
+        setLoading(hintBtn, false, "要提示");
+        if (!over) hintBtn.disabled = false;
+      }
+    }
+
+    async function revealAnswer() {
+      if (!gameId) return;
+
+      setLoading(revealBtn, true, "公布中");
+
+      try {
+        const result = await fetch("/api/reveal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ gameId })
+        }).then((r) => r.json());
+
+        over = true;
+        setCode(result.answer);
+        setGameEnabled(false);
+
+        addMessage({
+          title: "答案公布",
+          text: result.message,
+          type: "system",
+          chips: ["结束"]
+        });
+
+        updateMeta();
+      } catch (error) {
+        addMessage({
+          title: "公布失败",
+          text: error.message,
+          type: "error"
+        });
+      } finally {
+        setLoading(revealBtn, false, "公布答案");
+      }
+    }
+
+    updateMeta();
+  </script>
+</body>
+</html>
