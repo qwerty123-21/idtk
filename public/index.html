@@ -342,7 +342,7 @@
     <section class="hero">
       <div class="badge">✨ AI 关联猜词</div>
       <h1>看提示，猜隐藏词</h1>
-      <p>这版不用 Railway Variables。API Key 在网页里填写，默认使用 SecondZero 接口和模型。</p>
+      <p>这版优化了关联提示：AI 必须讲具体关系，不再写诗。</p>
     </section>
 
     <div class="layout">
@@ -368,7 +368,7 @@
                 </div>
                 <div>
                   <label for="model">模型</label>
-                  <input id="model" value="gemini-3-flash-preview-minimal-search" />
+                  <input id="model" value="gpt-5.3-codex-spark" />
                 </div>
                 <div>
                   <label for="apiUrl">API 地址</label>
@@ -439,9 +439,9 @@
 
       <aside class="side-card">
         <h2 class="side-title">玩法说明</h2>
-        <p>例子：如果答案是“犹豫”，公开提示是 <b>Y2</b>。你猜“床单”，AI 可能会说：“人躺在上面可能会这样。”</p>
-        <p>Key 不会上传到 GitHub，也不用填 Railway Variables。它只保存在你自己的浏览器里。</p>
-        <div class="small">如果换电脑或换浏览器，需要重新在网页里粘贴一次 Key。</div>
+        <p>例子：如果答案是“月亮”，你猜“月色”，AI 应该说：“月色是那个词照出来的光感。”</p>
+        <p>AI 不能直接说出答案，所以会用“那个词”代替隐藏答案。</p>
+        <div class="small">API Key 只保存在你自己的浏览器里，不会写进 GitHub。</div>
       </aside>
     </div>
   </div>
@@ -488,7 +488,7 @@
     function loadSettings() {
       apiKeyInput.value = localStorage.getItem("assoc_ai_api_key") || "";
       apiUrlInput.value = localStorage.getItem("assoc_ai_api_url") || "https://api.secondzero-ai.com/v1/chat/completions";
-      modelInput.value = localStorage.getItem("assoc_ai_model") || "gemini-3-flash-preview-minimal-search";
+      modelInput.value = localStorage.getItem("assoc_ai_model") || "gpt-5.3-codex-spark";
     }
 
     function saveSettings() {
@@ -616,6 +616,7 @@
 
         setCode(result.code);
         clearLog();
+
         addMessage({
           title: "新游戏开始",
           text: `公开提示是 ${result.code}。开始猜吧。`,
@@ -642,6 +643,7 @@
 
     async function submitGuess() {
       const guess = guessInput.value.trim();
+
       if (!guess || !gameId || over) return;
 
       guessInput.value = "";
@@ -655,13 +657,18 @@
       setLoading(guessBtn, true, "分析中");
 
       try {
-        const result = await apiPost("/api/guess", { gameId, guess });
+        const result = await apiPost("/api/guess", {
+          gameId,
+          guess
+        });
 
         lives = result.lives ?? lives;
         rounds = result.rounds ?? rounds;
         over = Boolean(result.over);
 
-        if (result.answer) setCode(result.answer);
+        if (result.answer) {
+          setCode(result.answer);
+        }
 
         addMessage({
           title: result.correct ? "答对了" : guess,
@@ -670,7 +677,10 @@
           chips: result.correct ? ["正确"] : [over ? "结束" : "关联"]
         });
 
-        if (over) setGameEnabled(false);
+        if (over) {
+          setGameEnabled(false);
+        }
+
         updateMeta();
       } catch (error) {
         addMessage({
@@ -680,7 +690,9 @@
         });
       } finally {
         setLoading(guessBtn, false, "提交猜测");
-        if (!over) guessBtn.disabled = false;
+        if (!over) {
+          guessBtn.disabled = false;
+        }
       }
     }
 
@@ -690,7 +702,9 @@
       setLoading(hintBtn, true, "提示中");
 
       try {
-        const result = await apiPost("/api/hint", { gameId });
+        const result = await apiPost("/api/hint", {
+          gameId
+        });
 
         lives = result.lives ?? lives;
         rounds = result.rounds ?? rounds;
@@ -712,7 +726,9 @@
         });
       } finally {
         setLoading(hintBtn, false, "要提示");
-        if (!over) hintBtn.disabled = false;
+        if (!over) {
+          hintBtn.disabled = false;
+        }
       }
     }
 
@@ -722,11 +738,13 @@
       setLoading(revealBtn, true, "公布中");
 
       try {
-        const result = await fetch("/api/reveal", {
+        const response = await fetch("/api/reveal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ gameId })
-        }).then((r) => r.json());
+        });
+
+        const result = await response.json();
 
         over = true;
         setCode(result.answer);

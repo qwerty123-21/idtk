@@ -1,7 +1,7 @@
 {
-  "name": "ai-association-guessing-game-no-railway-vars",
-  "version": "1.1.0",
-  "description": "AI association guessing game; API key entered in browser, no Railway Variables required",
+  "name": "ai-association-guessing-game-better-relations",
+  "version": "1.2.0",
+  "description": "AI association guessing game with stricter relation-style hints",
   "type": "module",
   "scripts": {
     "start": "node server.js",

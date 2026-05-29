@@ -8,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const DEFAULT_AI_API_URL = "https://api.secondzero-ai.com/v1/chat/completions";
-const DEFAULT_AI_MODEL = "gemini-3-flash-preview-minimal-search";
+const DEFAULT_AI_MODEL = "gpt-5.3-codex-spark";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +22,9 @@ app.use(express.static(path.join(__dirname, "public")));
 setInterval(() => {
   const now = Date.now();
   for (const [id, game] of games.entries()) {
-    if (now - game.createdAt > GAME_TTL_MS) games.delete(id);
+    if (now - game.createdAt > GAME_TTL_MS) {
+      games.delete(id);
+    }
   }
 }, 10 * 60 * 1000);
 
@@ -57,7 +59,12 @@ app.post("/api/new-game", async (req, res) => {
       guesses: []
     });
 
-    res.json({ gameId, code, lives: 8, rounds: 0 });
+    res.json({
+      gameId,
+      code,
+      lives: 8,
+      rounds: 0
+    });
   } catch (err) {
     console.error("[new-game error]", err);
     res.status(500).json({ error: friendlyError(err) });
@@ -156,7 +163,9 @@ app.post("/api/hint", async (req, res) => {
       });
     }
 
-    if (game.lives > 1) game.lives -= 1;
+    if (game.lives > 1) {
+      game.lives -= 1;
+    }
 
     const message = await generateExtraHint(
       ai,
@@ -187,6 +196,7 @@ app.post("/api/reveal", (req, res) => {
   }
 
   game.over = true;
+
   res.json({
     over: true,
     answer: game.word,
@@ -248,7 +258,9 @@ JSON 格式：
     const data = parseJson(content);
     const word = cleanWord(data.word);
 
-    if (isGoodChineseWord(word)) return word;
+    if (isGoodChineseWord(word)) {
+      return word;
+    }
   }
 
   throw new Error("AI 没有生成合格词语，请再试一次。");
@@ -256,76 +268,107 @@ JSON 格式：
 
 async function generateAssociationHint(ai, answer, guess, code, difficulty) {
   const prompt = `
-你是中文关联猜词游戏的反馈助手。
+你是中文“关联猜词”游戏的反馈助手。
 
-真实答案是：「${answer}」
+隐藏答案是：「${answer}」
 玩家猜的是：「${guess}」
-开局线索是：「${code}」
+公开线索是：「${code}」
 难度是：「${difficulty}」
 
 你的任务：
-必须说出「玩家猜的词」和「真实答案」之间的某种关联。
-哪怕关联很弱、很绕、很牵强，也要尽量圆回来。
+给出「玩家猜的词」和「隐藏答案」之间的具体关系提示。
 
-规则：
-- 绝对不能直接说出真实答案
-- 不能出现真实答案这个完整词
-- 不能说“没有关联”
-- 不能说“你猜错了”
-- 不能说“答案是”
-- 不能解释规则
+非常重要：
+- 不能直接说出隐藏答案
+- 不能出现隐藏答案这个完整词
+- 必须用“那个词”代替隐藏答案
+- 必须明确提到玩家猜的词：「${guess}」
+- 必须说明一种具体关系，不要写诗，不要空泛比喻
+- 关系类型只能从这些里面选：属性、组成、场景、功能、因果、同类、反义、谐音、常见搭配、上下位关系
 - 只输出一句中文
-- 最多 35 个中文字符
-- 语气像谜语提示
-- 可以用场景、动作、心情、因果、用途、谐音、反义、共同出现来建立关联
+- 25 到 55 个中文字符
+- 不要说“你猜错了”
+- 不要说“没有关联”
+- 不要说“答案是”
 
-示例：
-真实答案是「犹豫」，玩家猜「床单」
-可以回答：
-人躺在上面可能会这样。
+推荐句式：
+- 「${guess}」是那个词相关场景里的……
+- 「${guess}」和那个词都属于……
+- 「${guess}」常和那个词一起出现在……
+- 「${guess}」是那个词带来的/产生的/照出的……
+- 「${guess}」可以作为那个词的……
 
-现在请给出关联提示。
+好例子：
+隐藏答案「月亮」，玩家猜「月色」：
+「月色」是那个词照出来的光感。
+
+隐藏答案「月亮」，玩家猜「音乐」：
+「音乐」常是那个词出现时的夜晚背景。
+
+隐藏答案「犹豫」，玩家猜「床单」：
+「床单」所在的床上，人可能会陷入那个词。
+
+隐藏答案「苹果」，玩家猜「水果」：
+「水果」是那个词所属的大类。
+
+坏例子，禁止这样写：
+- 那个词在夜里悄悄撒下银白。
+- 你说音乐时，那个词会随旋律一起摇晃。
+- 它们都很美。
+- 有一点关系。
+
+现在请按规则输出一句关系提示。
 `;
 
   const text = await callAI(ai, [
-    { role: "system", content: "你是一个会硬圆关联的中文谜语主持人。" },
-    { role: "user", content: prompt }
+    {
+      role: "system",
+      content: "你是中文猜词游戏裁判。回答必须具体、像正常人解释关系，禁止诗意废话。"
+    },
+    {
+      role: "user",
+      content: prompt
+    }
   ], {
-    temperature: 0.95,
-    max_tokens: 80
+    temperature: 0.45,
+    max_tokens: 120
   });
 
-  return sanitizeModelText(text, answer);
+  return enforceRelationText(text, answer, guess);
 }
 
 async function generateExtraHint(ai, answer, code, category, difficulty) {
   const prompt = `
 你是中文关联猜词游戏的提示助手。
 
-真实答案是：「${answer}」
-开局线索是：「${code}」
+隐藏答案是：「${answer}」
+公开线索是：「${code}」
 题材是：「${category}」
 难度是：「${difficulty}」
 
 请给玩家一个额外提示。
 
 规则：
-- 不能直接说出真实答案
-- 不能出现真实答案这个完整词
+- 不能直接说出隐藏答案
+- 不能出现隐藏答案这个完整词
+- 必须用“那个词”代替隐藏答案
 - 不要透露拼音
 - 不要透露具体字形
 - 不能说“答案是”
 - 只输出一句中文
-- 最多 35 个中文字符
-- 提示要和答案有关，但不要太明显
+- 20 到 45 个中文字符
+- 提示要具体，不要写诗
+
+例子：
+那个词常出现在夜晚，也常和抬头看有关。
 `;
 
   const text = await callAI(ai, [
-    { role: "system", content: "你是中文猜词游戏提示助手，回答简短。" },
+    { role: "system", content: "你是中文猜词游戏提示助手，回答具体、简短，不要写诗。" },
     { role: "user", content: prompt }
   ], {
-    temperature: 0.85,
-    max_tokens: 80
+    temperature: 0.55,
+    max_tokens: 100
   });
 
   return sanitizeModelText(text, answer);
@@ -340,7 +383,9 @@ async function callAI(ai, messages, options = {}) {
     stream: false
   };
 
-  if (options.response_format) body.response_format = options.response_format;
+  if (options.response_format) {
+    body.response_format = options.response_format;
+  }
 
   return await postAI(ai, body, Boolean(options.response_format));
 }
@@ -410,7 +455,9 @@ function parseJson(text) {
   const first = clean.indexOf("{");
   const last = clean.lastIndexOf("}");
 
-  if (first !== -1 && last !== -1) clean = clean.slice(first, last + 1);
+  if (first !== -1 && last !== -1) {
+    clean = clean.slice(first, last + 1);
+  }
 
   return JSON.parse(clean);
 }
@@ -458,22 +505,48 @@ function safeText(value, maxLength) {
   return String(value || "").replace(/[<>]/g, "").slice(0, maxLength);
 }
 
+function enforceRelationText(text, answer, guess) {
+  let result = sanitizeModelText(text, answer);
+
+  if (guess && !result.includes(guess)) {
+    result = `「${guess}」和那个词有关：${result}`;
+  }
+
+  const vaguePatterns = [
+    "悄悄", "撒下", "摇晃", "很美", "有一点关系", "某种关系", "难以言说", "银白", "诗意"
+  ];
+
+  if (vaguePatterns.some((word) => result.includes(word))) {
+    result = `「${guess}」和那个词有关：它们常能出现在同一个场景里。`;
+  }
+
+  if (result.length > 75) {
+    result = result.slice(0, 75);
+  }
+
+  return result;
+}
+
 function sanitizeModelText(text, answer) {
   let result = String(text || "")
     .replace(/^```[\s\S]*?```$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (answer) result = result.replaceAll(answer, "那个词");
+  if (answer) {
+    result = result.replaceAll(answer, "那个词");
+  }
 
   result = result
     .replace(/^["“]/, "")
     .replace(/["”]$/, "")
     .trim();
 
-  if (result.length > 60) result = result.slice(0, 60);
+  if (result.length > 90) {
+    result = result.slice(0, 90);
+  }
 
-  return result || "它们可以被同一个场景牵到一起。";
+  return result || "它们常能出现在同一个场景里。";
 }
 
 function safeHost(url) {
@@ -488,7 +561,7 @@ function friendlyError(err) {
   const msg = String(err?.message || err || "");
 
   if (msg.includes("403")) {
-    return "AI 接口返回 403。通常是余额不足、Key 没权限、模型无权限，或平台拒绝这个请求。请看 Railway 的 View logs 红字。";
+    return "AI 接口返回 403。通常是余额不足、Key 没权限、模型无权限，或平台拒绝这个请求。";
   }
 
   if (msg.includes("401")) {
@@ -497,6 +570,10 @@ function friendlyError(err) {
 
   if (msg.includes("404")) {
     return "AI 接口返回 404。API 地址或模型名可能不对。";
+  }
+
+  if (msg.includes("Failed to fetch")) {
+    return "请求失败。请刷新页面，或看 Railway 日志确认服务是否重启。";
   }
 
   return msg || "服务器出错了。";
